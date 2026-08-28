@@ -257,28 +257,60 @@
   .spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--brass);border-radius:50%;animation:spin .8s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
-  .access-gate-overlay{
+
+  /* ---- access code gate (added) ---- */
+  #auth-overlay{
     position:fixed;inset:0;background:var(--canvas);z-index:999;
-    display:flex;align-items:flex-start;justify-content:center;
-    padding:20px;overflow-y:auto;
+    display:flex;align-items:center;justify-content:center;padding:20px;
   }
-  .access-gate-box{max-width:380px;width:100%;margin-top:12vh;align-self:flex-start;}
+  .auth-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius-m);
+    padding:32px 24px;max-width:360px;width:100%;text-align:center;
+  }
+  .auth-card .auth-icon{
+    width:52px;height:52px;border-radius:50%;background:var(--brass-tint);color:var(--brass-deep);
+    display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:22px;font-weight:700;
+    font-family:Georgia,serif;
+  }
+  .auth-card h2{font-size:18px;margin:0 0 6px;}
+  .auth-card p{font-size:13.5px;color:var(--ink-soft);margin:0 0 20px;line-height:1.6;}
+  .auth-input{
+    width:100%;font-size:22px;font-weight:700;text-align:center;letter-spacing:0.1em;
+    padding:14px;border:2px solid var(--line);border-radius:var(--radius-s);
+    background:#fff;color:var(--ink);font-family:inherit;margin-bottom:14px;
+  }
+  .auth-input:focus{outline:none;border-color:var(--brass);}
+  .auth-err{
+    color:var(--red-deep);font-size:13.5px;margin-bottom:14px;font-weight:700;
+    background:var(--red-tint);border-radius:var(--radius-s);padding:10px 12px;display:none;
+  }
+  #app-root{display:none;}
+
+  .gate-field-label{font-size:13px;font-weight:700;text-align:left;margin:10px 0 6px;color:var(--ink-soft);}
+  .gate-input.gate-worker{font-size:22px;letter-spacing:0;text-align:left;}
+  .worker-val{font-family:inherit!important;font-size:16px!important;}
+  .measure-grid-large{display:flex;flex-direction:column;gap:10px;max-width:520px;margin:0 auto;}
+  .measure-field-large{background:#fff;border:1.5px solid var(--line);padding:10px 12px;border-radius:var(--radius-m);}
+  .measure-field-large label{font-size:15px;margin-bottom:5px;}
+  .measure-field-large input{font-size:21px!important;font-weight:700;min-height:52px;padding:10px 44px 10px 12px!important;text-align:left;}
+  .measure-field-large .unit{font-size:14px;}
+  .download-info{background:var(--canvas);border:1px solid var(--line);border-radius:var(--radius-m);padding:14px 16px;margin:16px 0;font-size:13.5px;line-height:1.7;color:var(--ink-soft);}
+  .download-main-btn{font-size:19px;min-height:66px;margin-top:18px;}
+  @media(max-width:480px){.measure-grid-large{max-width:none;}.measure-field-large{padding:9px 10px}.measure-field-large input{font-size:21px!important;min-height:52px;}.no-banner{align-items:center;}.no-banner .val{font-size:16px;}}
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.28.1/tabler-icons.min.css">
 </head>
 <body>
-
-<div class="access-gate-overlay" id="access-gate-overlay" style="display:none;">
-  <div class="gate-wrap access-gate-box">
-    <div class="gate-icon"><i class="ti ti-lock" aria-hidden="true"></i></div>
+<div id="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-icon">🔒</div>
     <h2>アクセスコードを入力</h2>
-    <p>この台帳を使うには、共有されているアクセスコードが必要です。一度入力すれば、この端末では次回から自動的に使用されます。</p>
-    <input type="text" class="gate-input" id="access-code-input" placeholder="アクセスコード" autocomplete="off" autocapitalize="off" autofocus>
-    <div id="access-gate-err" class="error-text" style="display:none;"></div>
-    <button class="btn btn-primary btn-block" id="access-gate-submit">開始する</button>
+    <p>共有データにアクセスするためのコードを入力してください。</p>
+    <input type="text" id="auth-input" class="auth-input" placeholder="コード" autocomplete="off" value="01">
+    <div id="auth-err" class="auth-err"></div>
+    <button class="btn btn-primary btn-block" id="auth-btn">開く</button>
   </div>
 </div>
-
+<div id="app-root">
 <div class="app">
 
   <div class="app-header">
@@ -301,7 +333,7 @@
   <div class="view active" id="view-worker">
     <div class="worker-intro">
       <h2>新しい商品を登録する</h2>
-      <p>写真は先にメルカリへ10枚以上アップロードしてから、このフォームに入力してください。価格以外はここで全部決まります。</p>
+      <p>商品番号と担当者名から開始し、現場で必要な商品情報だけを入力します。最後にCSVデータをスマホへダウンロードします。</p>
     </div>
     <div id="worker-toast"></div>
     <div id="gate-panel"></div>
@@ -340,8 +372,13 @@
 
 <div class="overlay" id="detail-overlay"><div class="detail-sheet" id="detail-sheet"></div></div>
 <div class="overlay" id="settings-overlay"><div class="detail-sheet" id="settings-sheet"></div></div>
+</div>
+<!-- /#app-root -->
 
 <script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx7nUEEz08ivPpuzIsKrQCXYtssTm9rbmFoohCtCv9zP6OR4WA50Py9IET5yTLzgJSz/exec';
+const TEST_ACCESS_CODE = '01';
+let currentAccessCode = TEST_ACCESS_CODE;
 const CATEGORIES = ['ブルゾン','ライダース','コート','ダウンジャケット','マウンテンパーカー','ミリタリージャケット','テーラードジャケット','スタジャン','その他'];
 const SIZES = ['XS','S','M','L','XL','XXL','FREE'];
 const RANKS = [
@@ -362,7 +399,13 @@ const MEASURE_FIELDS = [
 ];
 const STATUS_LABELS = {new:'未確認', checked:'確認済', priced:'価格設定済', listed:'出品済'};
 const STATUS_CLASS = {new:'status-new', checked:'status-checked', priced:'status-priced', listed:'status-listed'};
-const STEP_COUNT = 6;
+const STEP_COUNT = 5;
+const GENDERS = ['メンズ','レディース','子供用','ユニセックス'];
+const QUICK_BRANDS = ['THE NORTH FACE','Patagonia','Columbia'];
+const COLOR_OPTIONS = ['ブラック','レッド','ブルー','ホワイト','ブラウン','グレー'];
+const MATERIAL_OPTIONS = ['ダウン','中綿','ナイロン','デニム'];
+const CONDITION_OPTIONS = ['普通の古着','目立つ汚れ無し','汚れあり'];
+const DESIGN_OPTIONS_V2 = ['ノーマル','ベスト','コート', ...DESIGN_OPTIONS];
 
 const DEFAULT_TEMPLATE = {
   shippingArea:'奈良県',
@@ -370,7 +413,7 @@ const DEFAULT_TEMPLATE = {
   shippingFeeNote:'送料込み(出品者負担)',
   shippingMethod:'ゆうゆうメルカリ便(匿名配送)',
   packagingNote:'衣類用袋にてコンパクトに梱包し発送させていただきます。',
-  cautionNote:'交渉中であってもメルカリの規定に沿って即購入された方を優先とさせて頂きますのでご了承ください。\n古着またはヴィンテージ品の為使用感等ございます。古着にご理解頂けない方、神経質な方はご購入をお控え下さい。\n※素人寸法ですので、若干の誤差はご了承下さい。',
+  cautionNote:'古着またはヴィンテージ品の為使用感等ございます。',
   promoNote:'最後までご覧いただきありがとうございました。',
   negotiationNote:'価格交渉につきましては若干では御座いますが対応させていただきます。'
 };
@@ -389,114 +432,50 @@ let activePlatform = 'mercari';
 
 function blankDraft(){
   return {
-    category:'', size:'', brand:'', color:'', managementNo:'', titleOverride:'',
+    gender:'', category:'', size:'', brand:'', color:'', colors:[], customColor:'', managementNo:'', titleOverride:'',
     features:[], design:[],
     measurements:{shoulder:'',chest:'',length:'',sleeve:''},
-    rank:'', material:'', conditionDetail:'',
-    shippingSize:'',
-    photoConfirmed:false, stagingUrl:'', workerName:''
+    rank:'', material:'', materialChoice:'', customMaterial:'', conditionChoice:'', conditionDetail:'', workerName:'',
+    shippingSize:'', photoConfirmed:false, stagingUrl:''
   };
 }
 
-/* ---------------- データ保存: Googleスプレッドシート(Apps Script経由) ----------------
-   ★API_URL は、Apps Scriptを「ウェブアプリとして導入」した際に発行されるURLに書き換えてください。 */
-const API_URL = 'https://script.google.com/macros/s/AKfycbx7nUEEz08ivPpuzIsKrQCXYtssTm9rbmFoohCtCv9zP6OR4WA50Py9IET5yTLzgJSz/exec';
-
-function getAccessCode(){ return localStorage.getItem('ledgerAccessCode') || ''; }
-function setAccessCode(v){ localStorage.setItem('ledgerAccessCode', v); }
-function clearAccessCode(){ localStorage.removeItem('ledgerAccessCode'); }
-
-// Apps Scriptへの全通信を担う共通関数。
-// text/plain で送ることで、ブラウザのCORSプリフライト(OPTIONS)を発生させず、
-// Apps Script側でも安定して受信できるようにしている。
-//
-// 「本当に通信できなかった場合」と「通信はできたが正しい応答が返らなかった場合」を
-// 区別できるよう、fetch自体の失敗と、その後の応答の解釈を別々に扱う。
-async function callApi(action, payload){
-  let res;
+async function callGAS(action, extraFields){
   try{
-    res = await fetch(API_URL, {
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify(Object.assign({action, code:getAccessCode()}, payload||{}))
+    const body = Object.assign({ code: currentAccessCode, action }, extraFields || {});
+    const httpRes = await fetch(GAS_URL, {
+      method: 'POST',
+      // text/plain avoids a CORS preflight (OPTIONS) request, which Apps Script web apps do not handle.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
     });
+    if(!httpRes.ok) return { ok:false, error:'network' };
+    const data = await httpRes.json();
+    return data;
   }catch(e){
-    // fetch自体が失敗 = 端末が本当にサーバーへ到達できていない(電波が悪い、機内モード等)
-    return {ok:false, error:'network', detail:String(e)};
-  }
-  try{
-    return await res.json();
-  }catch(e){
-    // サーバーへは到達できたが、想定した形式の応答が返らなかった場合。
-    // (アクセスコード不一致やApps Script側の設定不備などが主な原因のため、
-    //  「通信障害」ではなく「アクセスコードの問題」として扱う)
-    return {ok:false, error:'bad_response', detail:String(e)};
+    return { ok:false, error:'network' };
   }
 }
 
 async function loadItems(){
-  const res = await callApi('list', {});
+  const res = await callGAS('list');
   items = (res && res.ok && Array.isArray(res.items)) ? res.items : [];
   itemsLoaded = true;
 }
-// 商品1件だけをスプレッドシートの1行として保存(新規なら追加、既存idなら該当行を更新)
-// 新規登録の場合、商品番号(no/displayNo)はサーバー側で確定されたものが返る
-async function saveItemToServer(item){
-  return await callApi('saveItem', {item});
+async function saveItem(it){
+  const res = await callGAS('saveItem', { item: it });
+  return !!(res && res.ok);
 }
 async function loadTemplate(){
-  const res = await callApi('template', {});
-  template = (res && res.ok && res.template) ? Object.assign({}, DEFAULT_TEMPLATE, res.template) : JSON.parse(JSON.stringify(DEFAULT_TEMPLATE));
+  const res = await callGAS('template');
+  if(res && res.ok && res.template){
+    template = Object.assign({}, DEFAULT_TEMPLATE, res.template);
+  }
   templateLoaded = true;
 }
 async function persistTemplate(){
-  const res = await callApi('saveTemplate', {template});
+  const res = await callGAS('saveTemplate', { template: template });
   return !!(res && res.ok);
-}
-
-// 初回アクセス時(またはアクセスコード未確認時)に、共有のアクセスコードを確認する。
-// コードはこの端末のブラウザに保存され、次回以降は自動的に使用される。
-function ensureAccessGranted(){
-  const overlay = document.getElementById('access-gate-overlay');
-  const input = document.getElementById('access-code-input');
-  const errEl = document.getElementById('access-gate-err');
-  const btn = document.getElementById('access-gate-submit');
-
-  async function attempt(code){
-    setAccessCode(code);
-    const res = await callApi('list', {});
-    if(res && res.ok) return {ok:true};
-    clearAccessCode();
-    return {ok:false, reason: (res && res.error==='network') ? 'network' : 'code'};
-  }
-
-  return new Promise(async (resolve)=>{
-    const saved = getAccessCode();
-    if(saved){
-      const r = await attempt(saved);
-      if(r.ok){ overlay.style.display = 'none'; resolve(); return; }
-    }
-    overlay.style.display = 'flex';
-    async function submit(){
-      const code = input.value.trim();
-      if(!code){ errEl.textContent = 'アクセスコードを入力してください。'; errEl.style.display = 'flex'; return; }
-      btn.disabled = true; btn.textContent = '確認中…';
-      const r = await attempt(code);
-      btn.disabled = false; btn.textContent = '開始する';
-      if(r.ok){
-        overlay.style.display = 'none';
-        resolve();
-      } else if(r.reason === 'network'){
-        errEl.textContent = '通信エラーが発生しました。ネットワーク環境をご確認ください。';
-        errEl.style.display = 'flex';
-      } else {
-        errEl.textContent = '正しいアクセスコードを入力してください。';
-        errEl.style.display = 'flex';
-      }
-    }
-    btn.addEventListener('click', submit);
-    input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
-  });
 }
 
 function fmtNo(n){ return 'J-' + String(n).padStart(4,'0'); }
@@ -514,179 +493,150 @@ function switchMode(mode){
   if(mode==='worker'){ if(!gateUnlocked) renderGate(); renderRecent(); }
 }
 
-/* ---------------- worker stepper ---------------- */
-/* ---------------- management-number gate ---------------- */
 function renderGate(){
   document.getElementById('worker-form-wrap').style.display = 'none';
   const wrap = document.getElementById('gate-panel');
   wrap.innerHTML = `
     <div class="gate-wrap">
       <div class="gate-icon"><i class="ti ti-tag" aria-hidden="true"></i></div>
-      <h2>管理番号を入力してください</h2>
-      <p>商品・ビニール袋に書いた番号と同じものを入力します。<br>入力するまで、次の画面には進めません。</p>
+      <h2>商品登録を開始</h2>
+      <p>商品番号と担当者名を入力してからスタートします。</p>
+      <div class="gate-field-label">商品番号</div>
       <input type="text" inputmode="numeric" class="gate-input" id="gate-input" placeholder="例:1050" autofocus>
+      <div class="gate-field-label">担当者名</div>
+      <input type="text" class="gate-input gate-worker" id="gate-worker" placeholder="例:田中">
       <div id="gate-err" class="error-text" style="display:none;"></div>
-      <button class="btn btn-primary btn-block" id="gate-start">この番号で開始する</button>
-    </div>
-  `;
+      <button class="btn btn-primary btn-block" id="gate-start">この内容でスタート</button>
+    </div>`;
   document.getElementById('gate-start').addEventListener('click', onGateStart);
-  document.getElementById('gate-input').addEventListener('keydown', e=>{ if(e.key==='Enter') onGateStart(); });
+  document.getElementById('gate-worker').addEventListener('keydown', e=>{ if(e.key==='Enter') onGateStart(); });
 }
 
 async function onGateStart(){
   const val = document.getElementById('gate-input').value.trim();
-  if(!val){ showErr('gate-err','管理番号を入力してください。'); return; }
-  await loadItems(); // 他の端末からの最新の登録状況を反映してから重複チェックする
+  const worker = document.getElementById('gate-worker').value.trim();
+  if(!val || !worker){ showErr('gate-err','商品番号と担当者名の2つを入力してください。'); return; }
+  if(!itemsLoaded) await loadItems();
   const dup = items.find(it=>it.managementNo===val);
-  if(dup){
-    showErr('gate-err', `管理番号「${val}」はすでに登録されています(${dup.displayNo})。番号を確認してください。`);
-    return;
-  }
-  hideErr('gate-err');
+  if(dup){ showErr('gate-err', `商品番号「${val}」はすでに登録されています。`); return; }
   draft = blankDraft();
   draft.managementNo = val;
-  gateUnlocked = true;
-  step = 0;
+  draft.workerName = worker;
+  gateUnlocked = true; step = 0;
   document.getElementById('gate-panel').innerHTML = '';
   document.getElementById('worker-form-wrap').style.display = 'block';
   renderStep();
 }
 
 function renderStepperDots(){
-  const wrap = document.getElementById('stepper-dots');
-  wrap.innerHTML = '';
+  const wrap = document.getElementById('stepper-dots'); wrap.innerHTML='';
   for(let i=0;i<STEP_COUNT;i++){
-    const el = document.createElement('span');
-    el.textContent = i+1;
-    if(i<step) el.className='done';
-    else if(i===step) el.className='current';
+    const el=document.createElement('span'); el.textContent=i+1;
+    if(i<step) el.className='done'; else if(i===step) el.className='current';
     wrap.appendChild(el);
   }
 }
-
 function renderStep(){
   renderStepperDots();
-  const panel = document.getElementById('step-panel');
-  const steps = [stepHtml1, stepHtml2, stepHtml3, stepHtml4, stepHtml5, stepHtml6];
-  panel.innerHTML = noBannerHtml() + steps[step]();
-  bindStepEvents();
-  bindNoBanner();
+  const steps=[stepHtml1,stepHtml2,stepHtml3,stepHtml4,stepHtml5];
+  document.getElementById('step-panel').innerHTML=noBannerHtml()+steps[step]();
+  bindStepEvents(); bindNoBanner();
 }
-
 function noBannerHtml(){
-  return `
-    <div class="no-banner">
-      <div><div class="lab">管理番号</div><div class="val">${escapeHtml(draft.managementNo)}</div></div>
-      <button id="no-change-btn" type="button">番号を直す</button>
-    </div>
-  `;
+  return `<div class="no-banner">
+    <div><div class="lab">商品番号</div><div class="val">${escapeHtml(draft.managementNo)}</div></div>
+    <div><div class="lab">担当者</div><div class="val worker-val">${escapeHtml(draft.workerName)}</div></div>
+    <button id="no-change-btn" type="button">最初から</button>
+  </div>`;
 }
 function bindNoBanner(){
-  const btn = document.getElementById('no-change-btn');
-  if(btn) btn.addEventListener('click', ()=>{
-    if(confirm('この商品の入力内容は破棄されます。管理番号の入力からやり直しますか?')){
-      draft = blankDraft(); gateUnlocked = false; step = 0; renderGate();
-    }
+  const btn=document.getElementById('no-change-btn');
+  if(btn) btn.addEventListener('click',()=>{
+    if(confirm('入力内容を破棄して最初からやり直しますか?')){ draft=blankDraft(); gateUnlocked=false; step=0; renderGate(); }
   });
 }
 
 function stepHtml1(){
+  const isOther = draft.brand && !QUICK_BRANDS.includes(draft.brand);
   return `
-    <p class="step-eyebrow">Step 1 / ${STEP_COUNT}</p>
-    <h2 class="step-title">商品の基本情報</h2>
-    <div class="field">
-      <label>スタイル(種類)</label>
-      <div class="chip-grid" id="cat-chips">
-        ${CATEGORIES.map(c=>`<div class="chip wide ${draft.category===c?'selected':''}" data-val="${c}">${c}</div>`).join('')}
+    <p class="step-eyebrow">Step 1 / ${STEP_COUNT}</p><h2 class="step-title">商品の基本情報</h2>
+    <div class="field"><label>対象</label><div class="chip-grid" id="gender-chips">
+      ${GENDERS.map(v=>`<div class="chip wide ${draft.gender===v?'selected':''}" data-val="${v}">${v}</div>`).join('')}
+    </div></div>
+    <div class="field"><label>スタイル(種類)</label><div class="chip-grid" id="cat-chips">
+      ${CATEGORIES.map(c=>`<div class="chip wide ${draft.category===c?'selected':''}" data-val="${c}">${c}</div>`).join('')}
+    </div></div>
+    <div class="field"><label>サイズ表記</label><div class="chip-grid" id="size-chips">
+      ${SIZES.map(v=>`<div class="chip ${draft.size===v?'selected':''}" data-val="${v}">${v}</div>`).join('')}
+    </div></div>
+    <div class="field"><label>ブランド名</label><div class="chip-grid" id="brand-chips">
+      ${QUICK_BRANDS.map(v=>`<div class="chip wide ${draft.brand===v?'selected':''}" data-val="${v}">${v}</div>`).join('')}
+      <div class="chip wide ${isOther?'selected':''}" data-val="__other__">その他</div>
+    </div>
+    <input type="text" id="in-brand-other" placeholder="その他のブランド名" value="${escapeAttr(isOther?draft.brand:'')}" style="margin-top:10px;display:${isOther?'block':'none'};">
+    </div>
+    <div class="field"><label>カラー <span style="font-weight:400;color:var(--ink-soft);">（最大2色）</span></label>
+      <div class="chip-grid" id="color-chips">
+        ${COLOR_OPTIONS.map(v=>`<div class="chip ${draft.colors.includes(v)?'selected':''}" data-val="${v}">${v}</div>`).join('')}
+        <div class="chip ${draft.colors.includes('__other__')?'selected':''}" data-val="__other__">その他</div>
       </div>
-    </div>
-    <div class="field">
-      <label>サイズ表記</label>
-      <div class="chip-grid" id="size-chips">
-        ${SIZES.map(s=>`<div class="chip ${draft.size===s?'selected':''}" data-val="${s}">${s}</div>`).join('')}
-      </div>
-    </div>
-    <div class="field">
-      <label>ブランド名</label>
-      <input type="text" id="in-brand" placeholder="タグに書かれている名前を入力" value="${escapeAttr(draft.brand)}">
-    </div>
-    <div class="field">
-      <label>カラー</label>
-      <input type="text" id="in-color" placeholder="例:カーキ、ネイビー、ブラック" value="${escapeAttr(draft.color)}">
+      <input type="text" id="in-color-other" placeholder="その他のカラー名" value="${escapeAttr(draft.customColor||'')}" style="margin-top:10px;display:${draft.colors.includes('__other__')?'block':'none'};">
+      <p class="hint">2色選択すると「ブラック／レッド」のように自動で保存します。</p>
     </div>
     <div id="err1" class="error-text" style="display:none;"></div>
-    <div class="step-actions"><span></span><button class="btn btn-primary" id="next1">次へ</button></div>
-  `;
+    <div class="step-actions"><span></span><button class="btn btn-primary" id="next1">次へ</button></div>`;
 }
-
 function stepHtml2(){
   return `
-    <p class="step-eyebrow">Step 2 / ${STEP_COUNT}</p>
-    <h2 class="step-title">特徴・デザイン</h2>
-    <p class="step-sub">あてはまるものをすべて選んでください(複数選択できます)。</p>
-    <div class="field">
-      <label>特徴</label>
-      <div class="chip-grid" id="feature-chips">
-        ${FEATURE_OPTIONS.map(f=>`<div class="chip ${draft.features.includes(f)?'selected':''}" data-val="${f}">${f}</div>`).join('')}
-      </div>
-    </div>
-    <div class="field">
-      <label>デザイン</label>
-      <div class="chip-grid" id="design-chips">
-        ${DESIGN_OPTIONS.map(d=>`<div class="chip ${draft.design.includes(d)?'selected':''}" data-val="${d}">${d}</div>`).join('')}
-      </div>
-    </div>
-    <div class="step-actions">
-      <button class="btn btn-ghost" id="back2">戻る</button>
-      <button class="btn btn-primary" id="next2">次へ</button>
-    </div>
-  `;
+    <p class="step-eyebrow">Step 2 / ${STEP_COUNT}</p><h2 class="step-title">特徴・デザイン</h2>
+    <p class="step-sub">あてはまるものを選んでください。複数選択できます。</p>
+    <div class="field"><label>特徴</label><div class="chip-grid" id="feature-chips">
+      ${FEATURE_OPTIONS.map(f=>`<div class="chip ${draft.features.includes(f)?'selected':''}" data-val="${f}">${f}</div>`).join('')}
+    </div></div>
+    <div class="field"><label>デザイン</label><div class="chip-grid" id="design-chips">
+      ${DESIGN_OPTIONS_V2.map(d=>`<div class="chip ${draft.design.includes(d)?'selected':''}" data-val="${d}">${d}</div>`).join('')}
+    </div></div>
+    <div class="step-actions"><button class="btn btn-ghost" id="back2">戻る</button><button class="btn btn-primary" id="next2">次へ</button></div>`;
 }
-
 function stepHtml3(){
   return `
-    <p class="step-eyebrow">Step 3 / ${STEP_COUNT}</p>
-    <h2 class="step-title">寸法をはかる(cm)</h2>
-    <div class="diagram-wrap">${jacketDiagramSvg()}</div>
-    <div class="measure-grid">
-      ${MEASURE_FIELDS.map(f=>`
-        <div class="measure-field">
-          <label><span class="measure-swatch" style="background:${f.color}"></span>${f.label}</label>
-          <div class="unit-input">
-            <input type="number" inputmode="decimal" step="0.5" min="0" id="m-${f.key}" value="${draft.measurements[f.key]}">
-            <span class="unit">cm</span>
-          </div>
-        </div>
-      `).join('')}
+    <p class="step-eyebrow">Step 3 / ${STEP_COUNT}</p><h2 class="step-title">寸法を入力 (cm)</h2>
+    <p class="step-sub">採寸しながら上から順番に入力してください。</p>
+    <div class="measure-grid measure-grid-large">
+      ${MEASURE_FIELDS.map(f=>`<div class="measure-field measure-field-large"><label>${f.label}</label><div class="unit-input"><input type="number" inputmode="decimal" step="0.5" min="0" id="m-${f.key}" value="${draft.measurements[f.key]}" placeholder="0"><span class="unit">cm</span></div></div>`).join('')}
     </div>
     <div id="err3" class="error-text" style="display:none;"></div>
-    <div class="step-actions">
-      <button class="btn btn-ghost" id="back3">戻る</button>
-      <button class="btn btn-primary" id="next3">次へ</button>
-    </div>
-  `;
+    <div class="step-actions"><button class="btn btn-ghost" id="back3">戻る</button><button class="btn btn-primary" id="next3">次へ</button></div>`;
 }
-
 function stepHtml4(){
   return `
     <p class="step-eyebrow">Step 4 / ${STEP_COUNT}</p>
-    <h2 class="step-title">状態・素材</h2>
-    <div class="field">
-      <label>状態ランク</label>
-      <div class="rank-grid" id="rank-chips">
-        ${RANKS.map(r=>`<div class="rank-chip ${draft.rank===r.k?'selected':''}" data-val="${r.k}">${r.k}</div>`).join('')}
-      </div>
-      <p class="hint">${RANKS.map(r=>r.k+'='+r.d).join(' / ')}</p>
-    </div>
+    <h2 class="step-title">素材・状態</h2>
+
     <div class="field">
       <label>素材</label>
-      <input type="text" id="in-material" placeholder="例:コットン、ナイロン、ウール" value="${escapeAttr(draft.material)}">
+      <div class="chip-grid" id="material-chips">
+        ${MATERIAL_OPTIONS.map(v=>`<div class="chip ${draft.materialChoice===v?'selected':''}" data-val="${v}">${v}</div>`).join('')}
+        <div class="chip ${draft.materialChoice==='__other__'?'selected':''}" data-val="__other__">その他</div>
+      </div>
+      <input type="text" id="in-material-other" placeholder="その他の素材を入力"
+        value="${escapeAttr(draft.customMaterial||'')}"
+        style="margin-top:10px;display:${draft.materialChoice==='__other__'?'block':'none'};">
     </div>
+
     <div class="field">
-      <label>状態詳細(具体的な傷・補修・汚れなど)</label>
-      <textarea id="in-conddetail" placeholder="例:左内側を修正シールにて補修しています。袖口に多少の毛羽立ちあり。">${escapeAttr(draft.conditionDetail)}</textarea>
-      <p class="hint">ここに書いた内容は、そのまま出品文の「状態詳細」に使われます。</p>
+      <label>状態</label>
+      <div class="chip-grid" id="condition-chips">
+        ${CONDITION_OPTIONS.map(v=>`<div class="chip ${draft.conditionChoice===v?'selected':''}" data-val="${v}">${v}</div>`).join('')}
+      </div>
     </div>
+
+    <div class="field">
+      <label>その他の状態・傷・補修など</label>
+      <textarea id="in-conddetail" placeholder="必要な場合だけ入力してください。例: 袖口に薄い汚れ、内側に補修あり">${escapeAttr(draft.conditionDetail||'')}</textarea>
+      <p class="hint">ボタンで大まかな状態を選び、必要な商品だけ補足してください。</p>
+    </div>
+
     <div id="err4" class="error-text" style="display:none;"></div>
     <div class="step-actions">
       <button class="btn btn-ghost" id="back4">戻る</button>
@@ -694,161 +644,147 @@ function stepHtml4(){
     </div>
   `;
 }
-
 function stepHtml5(){
+  const filename=`商品_${draft.managementNo}_${draft.workerName}.csv`;
   return `
-    <p class="step-eyebrow">Step 5 / ${STEP_COUNT}</p>
-    <h2 class="step-title">写真・配送サイズ</h2>
-    <div class="field">
-      <label class="checkbox-row" for="in-photo">
-        <input type="checkbox" id="in-photo" ${draft.photoConfirmed?'checked':''}>
-        <span>写真を10枚以上、ステージング用メルカリにアップロードしました</span>
-      </label>
-    </div>
-    <div class="field">
-      <label>ステージング用メルカリのURL</label>
-      <input type="url" id="in-staging" placeholder="https://jp.mercari.com/item/..." value="${escapeAttr(draft.stagingUrl)}">
-    </div>
-    <div class="field">
-      <label>配送サイズ(3辺合計)</label>
-      <div class="chip-grid" id="shipsize-chips">
-        ${SHIP_SIZE_OPTIONS.map(s=>`<div class="chip ${draft.shippingSize===s?'selected':''}" data-val="${s}">${s}</div>`).join('')}
-      </div>
-      <p class="hint">商品をたたんで梱包した状態で、縦+横+高さの合計を測って一番近いものを選んでください。</p>
-    </div>
-    <div class="field">
-      <label>担当者名(任意)</label>
-      <input type="text" id="in-workername" placeholder="あなたの名前" value="${escapeAttr(draft.workerName)}">
-    </div>
+    <p class="step-eyebrow">Step 5 / ${STEP_COUNT}</p><h2 class="step-title">入力内容の確認</h2>
+    <ul class="confirm-list">
+      <li><span>商品番号 / 担当者</span><span>${escapeHtml(draft.managementNo)} / ${escapeHtml(draft.workerName)}</span></li>
+      <li><span>対象</span><span>${escapeHtml(draft.gender)}</span></li>
+      <li><span>種類 / サイズ</span><span>${escapeHtml(draft.category)} / ${escapeHtml(draft.size)}</span></li>
+      <li><span>ブランド / カラー</span><span>${escapeHtml(draft.brand)} / ${escapeHtml(draft.color)}</span></li>
+      <li><span>特徴</span><span>${escapeHtml((draft.features||[]).join('・')||'-')}</span></li>
+      <li><span>デザイン</span><span>${escapeHtml((draft.design||[]).join('・')||'-')}</span></li>
+      <li><span>肩幅 / 身幅</span><span>${draft.measurements.shoulder} / ${draft.measurements.chest} cm</span></li>
+      <li><span>着丈 / 袖丈</span><span>${draft.measurements.length} / ${draft.measurements.sleeve} cm</span></li>
+      <li><span>状態ランク / 素材</span><span>${escapeHtml(draft.rank)} / ${escapeHtml(draft.material)}</span></li>
+      <li><span>状態詳細</span><span>${escapeHtml(draft.conditionDetail)}</span></li>
+    </ul>
+    <div class="download-info"><strong>保存形式: CSV</strong><br>ファイル名: ${escapeHtml(filename)}<br>保存先: スマホの「ダウンロード」フォルダ（端末・ブラウザ設定により表示名が異なります）</div>
+    <div id="download-done" class="save-toast" style="display:none;">✓ ダウンロード終了</div>
     <div id="err5" class="error-text" style="display:none;"></div>
-    <div class="step-actions">
-      <button class="btn btn-ghost" id="back5">戻る</button>
-      <button class="btn btn-primary" id="next5">次へ</button>
-    </div>
-  `;
+    <div class="step-actions"><button class="btn btn-ghost" id="back5">戻る</button></div>
+    <button class="btn btn-primary btn-block download-main-btn" id="download-data">データをダウンロード</button>
+    <button class="btn btn-ghost btn-block" id="next-item" style="margin-top:12px;display:none;">次の商品を登録する</button>`;
 }
+function buildTitle(d){ return [d.brand,d.category,d.color,d.managementNo].filter(Boolean).join(' '); }
 
-function stepHtml6(){
-  const autoTitle = buildTitle(draft);
-  return `
-    <p class="step-eyebrow">Step 6 / ${STEP_COUNT}</p>
-    <h2 class="step-title">商品名の確認</h2>
-    <div class="field">
-      <label>商品名(見出し)</label>
-      <input type="text" id="in-title" value="${escapeAttr(draft.titleOverride || autoTitle)}">
-      <p class="hint">自動で作成しています。必要があれば書き換えてください。</p>
-    </div>
-    <div class="field">
-      <label>内容の確認</label>
-      <ul class="confirm-list">
-        <li><span>管理番号</span><span>${escapeHtml(draft.managementNo)}</span></li>
-        <li><span>スタイル / サイズ</span><span>${draft.category||'-'} / ${draft.size||'-'}</span></li>
-        <li><span>ブランド / カラー</span><span>${escapeHtml(draft.brand)||'-'} / ${escapeHtml(draft.color)||'-'}</span></li>
-        <li><span>肩幅 / 身幅</span><span>${draft.measurements.shoulder||'-'}cm / ${draft.measurements.chest||'-'}cm</span></li>
-        <li><span>着丈 / 袖丈</span><span>${draft.measurements.length||'-'}cm / ${draft.measurements.sleeve||'-'}cm</span></li>
-        <li><span>状態ランク</span><span>${draft.rank||'-'}</span></li>
-        <li><span>配送サイズ</span><span>${draft.shippingSize||'-'}</span></li>
-        <li><span>写真確認</span><span>${draft.photoConfirmed?'済':'未'}</span></li>
-      </ul>
-    </div>
-    <div id="err6" class="error-text" style="display:none;"></div>
-    <div class="step-actions">
-      <button class="btn btn-ghost" id="back6">戻る</button>
-      <button class="btn btn-primary" id="submit6">この内容で登録する</button>
-    </div>
-  `;
+function csvEscape(v){
+  const s=String(v??'').replace(/"/g,'""'); return `"${s}"`;
 }
-
-function buildTitle(d){
-  return [d.brand, d.category, d.color, d.managementNo].filter(Boolean).join(' ');
+function downloadDraftCsv(){
+  const headers=['商品番号','担当者','対象','種類','サイズ','ブランド','カラー','特徴','デザイン','肩幅cm','身幅cm','着丈cm','袖丈cm','状態ランク','素材','状態詳細'];
+  const row=[draft.managementNo,draft.workerName,draft.gender,draft.category,draft.size,draft.brand,draft.color,(draft.features||[]).join('・'),(draft.design||[]).join('・'),draft.measurements.shoulder,draft.measurements.chest,draft.measurements.length,draft.measurements.sleeve,draft.rank,draft.material,draft.conditionDetail];
+  const csv='\ufeff'+headers.map(csvEscape).join(',')+'\r\n'+row.map(csvEscape).join(',')+'\r\n';
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`商品_${draft.managementNo}_${draft.workerName}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 
 function bindStepEvents(){
   if(step===0){
-    document.querySelectorAll('#cat-chips .chip').forEach(el=>el.addEventListener('click', ()=>{ draft.category=el.dataset.val; renderStep(); }));
-    document.querySelectorAll('#size-chips .chip').forEach(el=>el.addEventListener('click', ()=>{ draft.size=el.dataset.val; renderStep(); }));
-    document.getElementById('next1').addEventListener('click', ()=>{
-      draft.brand = document.getElementById('in-brand').value.trim();
-      draft.color = document.getElementById('in-color').value.trim();
-      if(!draft.category || !draft.size || !draft.brand || !draft.color){
-        showErr('err1','スタイル・サイズ・ブランド・カラーをすべて入力してください。'); return;
+    document.querySelectorAll('#gender-chips .chip').forEach(el=>el.addEventListener('click',()=>{draft.gender=el.dataset.val;renderStep();}));
+    document.querySelectorAll('#cat-chips .chip').forEach(el=>el.addEventListener('click',()=>{draft.category=el.dataset.val;renderStep();}));
+    document.querySelectorAll('#size-chips .chip').forEach(el=>el.addEventListener('click',()=>{draft.size=el.dataset.val;renderStep();}));
+    document.querySelectorAll('#brand-chips .chip').forEach(el=>el.addEventListener('click',()=>{
+      if(el.dataset.val==='__other__'){ if(QUICK_BRANDS.includes(draft.brand)) draft.brand=''; }
+      else draft.brand=el.dataset.val;
+      renderStep();
+      if(el.dataset.val==='__other__'){ const inp=document.getElementById('in-brand-other'); if(inp){inp.style.display='block';inp.focus();} }
+    }));
+    document.querySelectorAll('#color-chips .chip').forEach(el=>el.addEventListener('click',()=>{
+      const val=el.dataset.val;
+      const idx=draft.colors.indexOf(val);
+      if(idx>=0){
+        draft.colors.splice(idx,1);
+      }else{
+        if(draft.colors.length>=2) draft.colors.shift();
+        draft.colors.push(val);
       }
-      hideErr('err1'); step=1; renderStep();
+      renderStep();
+      if(val==='__other__'){
+        const inp=document.getElementById('in-color-other');
+        if(inp){inp.style.display='block';inp.focus();}
+      }
+    }));
+    document.getElementById('next1').addEventListener('click',()=>{
+      const other=document.getElementById('in-brand-other');
+      if(other && other.style.display!=='none' && other.value.trim()) draft.brand=other.value.trim();
+
+      const colorOther=document.getElementById('in-color-other');
+      if(colorOther) draft.customColor=colorOther.value.trim();
+
+      const finalColors=(draft.colors||[]).map(v=>v==='__other__'?draft.customColor:v).filter(Boolean);
+      draft.color=finalColors.join('／');
+
+      if(!draft.gender||!draft.category||!draft.size||!draft.brand||!draft.color){
+        showErr('err1','対象・種類・サイズ・ブランド・カラーを入力してください。');
+        return;
+      }
+      step=1;renderStep();
     });
   }
   if(step===1){
-    document.querySelectorAll('#feature-chips .chip').forEach(el=>el.addEventListener('click', ()=>{
-      toggleArr(draft.features, el.dataset.val); renderStep();
-    }));
-    document.querySelectorAll('#design-chips .chip').forEach(el=>el.addEventListener('click', ()=>{
-      toggleArr(draft.design, el.dataset.val); renderStep();
-    }));
-    document.getElementById('back2').addEventListener('click', ()=>{ step=0; renderStep(); });
-    document.getElementById('next2').addEventListener('click', ()=>{ step=2; renderStep(); });
+    document.querySelectorAll('#feature-chips .chip').forEach(el=>el.addEventListener('click',()=>{toggleArr(draft.features,el.dataset.val);renderStep();}));
+    document.querySelectorAll('#design-chips .chip').forEach(el=>el.addEventListener('click',()=>{toggleArr(draft.design,el.dataset.val);renderStep();}));
+    document.getElementById('back2').addEventListener('click',()=>{step=0;renderStep();});
+    document.getElementById('next2').addEventListener('click',()=>{step=2;renderStep();});
   }
   if(step===2){
-    document.getElementById('back3').addEventListener('click', ()=>{ step=1; renderStep(); });
-    document.getElementById('next3').addEventListener('click', ()=>{
-      const vals = {}; let ok = true;
-      MEASURE_FIELDS.forEach(f=>{
-        const v = document.getElementById('m-'+f.key).value;
-        vals[f.key] = v;
-        if(!v || isNaN(v) || Number(v)<=0) ok=false;
-      });
-      if(!ok){ showErr('err3','4項目すべてに数字(cm)を入力してください。'); return; }
-      draft.measurements = vals;
-      hideErr('err3'); step=3; renderStep();
+    document.getElementById('back3').addEventListener('click',()=>{step=1;renderStep();});
+    document.getElementById('next3').addEventListener('click',()=>{
+      const vals={};let ok=true;MEASURE_FIELDS.forEach(f=>{const v=document.getElementById('m-'+f.key).value;vals[f.key]=v;if(!v||isNaN(v)||Number(v)<=0)ok=false;});
+      if(!ok){showErr('err3','4項目すべてに寸法を入力してください。');return;} draft.measurements=vals;step=3;renderStep();
     });
   }
   if(step===3){
-    document.querySelectorAll('#rank-chips .rank-chip').forEach(el=>el.addEventListener('click', ()=>{ draft.rank=el.dataset.val; renderStep(); }));
-    document.getElementById('back4').addEventListener('click', ()=>{ step=2; renderStep(); });
-    document.getElementById('next4').addEventListener('click', ()=>{
-      draft.material = document.getElementById('in-material').value.trim();
-      draft.conditionDetail = document.getElementById('in-conddetail').value.trim();
-      if(!draft.rank || !draft.material || !draft.conditionDetail){
-        showErr('err4','状態ランク・素材・状態詳細をすべて入力してください。'); return;
+    document.querySelectorAll('#material-chips .chip').forEach(el=>el.addEventListener('click',()=>{
+      draft.materialChoice = el.dataset.val;
+      renderStep();
+      if(el.dataset.val==='__other__'){
+        const inp=document.getElementById('in-material-other');
+        if(inp){inp.style.display='block';inp.focus();}
       }
-      hideErr('err4'); step=4; renderStep();
+    }));
+
+    document.querySelectorAll('#condition-chips .chip').forEach(el=>el.addEventListener('click',()=>{
+      draft.conditionChoice = el.dataset.val;
+      renderStep();
+    }));
+
+    document.getElementById('back4').addEventListener('click',()=>{step=2;renderStep();});
+
+    document.getElementById('next4').addEventListener('click',()=>{
+      const otherMat=document.getElementById('in-material-other');
+      if(otherMat) draft.customMaterial=otherMat.value.trim();
+
+      draft.material = draft.materialChoice==='__other__' ? draft.customMaterial : draft.materialChoice;
+      draft.conditionDetail = document.getElementById('in-conddetail').value.trim();
+
+      if(!draft.material){
+        showErr('err4','素材を選択してください。その他の場合は素材名を入力してください。');
+        return;
+      }
+      if(!draft.conditionChoice){
+        showErr('err4','状態を選択してください。');
+        return;
+      }
+      hideErr('err4');
+      step=4;
+      renderStep();
     });
   }
   if(step===4){
-    document.querySelectorAll('#shipsize-chips .chip').forEach(el=>el.addEventListener('click', ()=>{ draft.shippingSize=el.dataset.val; renderStep(); }));
-    document.getElementById('back5').addEventListener('click', ()=>{ step=3; renderStep(); });
-    document.getElementById('next5').addEventListener('click', ()=>{
-      draft.photoConfirmed = document.getElementById('in-photo').checked;
-      draft.stagingUrl = document.getElementById('in-staging').value.trim();
-      draft.workerName = document.getElementById('in-workername').value.trim();
-      if(!draft.photoConfirmed){ showErr('err5','写真アップロードの確認にチェックを入れてください。'); return; }
-      if(!draft.stagingUrl){ showErr('err5','ステージング用メルカリのURLを入力してください。'); return; }
-      if(!draft.shippingSize){ showErr('err5','配送サイズを選択してください。'); return; }
-      hideErr('err5'); step=5; renderStep();
-    });
-  }
-  if(step===5){
-    document.getElementById('back6').addEventListener('click', ()=>{ step=4; renderStep(); });
-    document.getElementById('submit6').addEventListener('click', async ()=>{
-      draft.titleOverride = document.getElementById('in-title').value.trim();
-      if(!draft.titleOverride){ showErr('err6','商品名を入力してください。'); return; }
-      const btn = document.getElementById('submit6');
-      btn.disabled = true; btn.textContent = '登録中…';
-      const newItem = {
-        id: 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-        no: 0, displayNo: '',
-        createdAt: new Date().toISOString(),
-        status: 'new', price:'', adminDescription:'',
-        ...JSON.parse(JSON.stringify(draft))
-      };
-      const res = await saveItemToServer(newItem);
-      btn.disabled = false; btn.textContent = 'この内容で登録する';
-      if(!res || !res.ok){ showErr('err6','保存に失敗しました。通信環境を確認してもう一度お試しください。'); return; }
-      newItem.no = res.no; newItem.displayNo = res.displayNo;
+    document.getElementById('back5').addEventListener('click',()=>{step=3;renderStep();});
+    document.getElementById('download-data').addEventListener('click',async()=>{
+      downloadDraftCsv();
+      if(!itemsLoaded) await loadItems();
+      const no=items.length+1; const newItem={id:'item_'+Date.now(),no,displayNo:fmtNo(no),createdAt:new Date().toISOString(),status:'new',price:'',adminDescription:'',...JSON.parse(JSON.stringify(draft))};
       items.push(newItem);
-      showToast('登録しました:' + newItem.displayNo);
-      draft = blankDraft(); gateUnlocked = false; step = 0;
-      renderGate();
-      renderRecent();
+      await saveItem(newItem);
+      document.getElementById('download-done').style.display='flex'; document.getElementById('next-item').style.display='block';
     });
+    document.getElementById('next-item').addEventListener('click',()=>{draft=blankDraft();gateUnlocked=false;step=0;renderGate();renderRecent();});
   }
 }
 
@@ -1074,8 +1010,7 @@ function renderDetail(){
     if(it.price && (it.status==='new' || it.status==='checked')) it.status='priced';
     const btn = document.getElementById('save-detail');
     btn.disabled = true; btn.textContent='保存中…';
-    const res = await saveItemToServer(it);
-    const ok = !!(res && res.ok);
+    const ok = await saveItem(it);
     btn.disabled = false; btn.textContent = ok ? '保存しました' : '保存に失敗しました';
     renderAdmin();
     setTimeout(()=>{ if(document.getElementById('save-detail')) document.getElementById('save-detail').textContent='保存する'; },1500);
@@ -1190,12 +1125,49 @@ function escapeHtml(s){
 function escapeAttr(s){ return escapeHtml(s); }
 
 (async function init(){
-  await ensureAccessGranted();
+  bindAuthGate();
+})();
+
+function bindAuthGate(){
+  const btn = document.getElementById('auth-btn');
+  const input = document.getElementById('auth-input');
+  const errBox = document.getElementById('auth-err');
+  function showAuthErr(msg){ errBox.textContent = msg; errBox.style.display = 'block'; }
+  function hideAuthErr(){ errBox.style.display = 'none'; }
+
+  async function attemptLogin(){
+    const code = input.value.trim();
+    if(!code){ showAuthErr('正しいアクセスコードを入力してください。'); return; }
+    btn.disabled = true; btn.textContent = '確認中…';
+    currentAccessCode = code;
+    const res = await callGAS('list');
+    btn.disabled = false; btn.textContent = '開く';
+
+    if(res && res.ok){
+      hideAuthErr();
+      items = Array.isArray(res.items) ? res.items : [];
+      itemsLoaded = true;
+      document.getElementById('auth-overlay').style.display = 'none';
+      document.getElementById('app-root').style.display = 'block';
+      await startApp();
+    } else if(res && res.error === 'network'){
+      showAuthErr('通信エラーが発生しました。ネットワーク環境をご確認ください。');
+    } else {
+      // covers explicit auth-failure responses and any other non-success case
+      showAuthErr('正しいアクセスコードを入力してください。');
+    }
+  }
+
+  btn.addEventListener('click', attemptLogin);
+  input.addEventListener('keydown', e=>{ if(e.key === 'Enter') attemptLogin(); });
+}
+
+async function startApp(){
   renderGate();
-  await loadItems();
+  if(!itemsLoaded) await loadItems();
   await loadTemplate();
   renderRecent();
-})();
+}
 </script>
 </body>
 </html>
