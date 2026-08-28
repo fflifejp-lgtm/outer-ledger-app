@@ -358,9 +358,14 @@
         <button data-status="listed">出品済</button>
       </div>
       <input type="text" class="search-box" id="search-box" placeholder="番号・ブランドで検索">
+      <button class="settings-btn" id="export-csv-btn"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i>CSV出力(全商品)</button>
       <button class="settings-btn" id="open-settings"><i class="ti ti-settings" aria-hidden="true"></i>テンプレート設定</button>
     </div>
     <div id="admin-loading" class="loading-row"><div class="spin"></div>読み込み中…</div>
+    <div id="admin-load-retry" style="display:none;margin-bottom:14px;">
+      <div class="error-text">読み込みに時間がかかっています。通信状況をご確認のうえ、再読み込みしてください。</div>
+      <button class="btn btn-ghost" id="admin-retry-btn" style="margin-top:8px;">再読み込み</button>
+    </div>
     <div class="admin-grid" id="admin-grid"></div>
     <div class="empty-state" id="admin-empty" style="display:none;">
       <i class="ti ti-shirt"></i>
@@ -441,26 +446,34 @@ function blankDraft(){
 }
 
 async function callGAS(action, extraFields){
+  const controller = new AbortController();
+  const timeoutId = setTimeout(()=>controller.abort(), 20000); // 20s timeout so the UI never hangs forever
   try{
     const body = Object.assign({ code: currentAccessCode, action }, extraFields || {});
     const httpRes = await fetch(GAS_URL, {
       method: 'POST',
       // text/plain avoids a CORS preflight (OPTIONS) request, which Apps Script web apps do not handle.
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if(!httpRes.ok) return { ok:false, error:'network' };
     const data = await httpRes.json();
     return data;
   }catch(e){
+    clearTimeout(timeoutId);
     return { ok:false, error:'network' };
   }
 }
 
 async function loadItems(){
   const res = await callGAS('list');
-  items = (res && res.ok && Array.isArray(res.items)) ? res.items : [];
-  itemsLoaded = true;
+  if(res && res.ok && Array.isArray(res.items)){
+    items = res.items;
+    itemsLoaded = true;
+  }
+  // on failure, leave itemsLoaded as-is (false) so callers know the load did not succeed
 }
 async function saveItem(it){
   const res = await callGAS('saveItem', { item: it });
@@ -483,6 +496,8 @@ function fmtNo(n){ return 'J-' + String(n).padStart(4,'0'); }
 document.getElementById('btn-mode-worker').addEventListener('click', ()=>switchMode('worker'));
 document.getElementById('btn-mode-admin').addEventListener('click', ()=>switchMode('admin'));
 document.getElementById('open-settings').addEventListener('click', openSettings);
+document.getElementById('admin-retry-btn').addEventListener('click', ()=>{ itemsLoaded=false; renderAdmin(); });
+document.getElementById('export-csv-btn').addEventListener('click', downloadAllItemsCsv);
 
 function switchMode(mode){
   document.getElementById('btn-mode-worker').classList.toggle('active', mode==='worker');
@@ -517,7 +532,7 @@ async function onGateStart(){
   const worker = document.getElementById('gate-worker').value.trim();
   if(!val || !worker){ showErr('gate-err','商品番号と担当者名の2つを入力してください。'); return; }
   if(!itemsLoaded) await loadItems();
-  const dup = items.find(it=>it.managementNo===val);
+  const dup = items.find(it=>it.managementNo===val && !it.deleted);
   if(dup){ showErr('gate-err', `商品番号「${val}」はすでに登録されています。`); return; }
   draft = blankDraft();
   draft.managementNo = val;
@@ -672,6 +687,25 @@ function buildTitle(d){ return [d.brand,d.category,d.color,d.managementNo].filte
 function csvEscape(v){
   const s=String(v??'').replace(/"/g,'""'); return `"${s}"`;
 }
+function downloadAllItemsCsv(){
+  const headers=['商品番号','担当者','対象','種類','サイズ','ブランド','カラー','特徴','デザイン','肩幅cm','身幅cm','着丈cm','袖丈cm','状態ランク','素材','状態詳細'];
+  const rows = items.filter(it=>!it.deleted).map(it=>[
+    it.managementNo, it.workerName, it.gender, it.category, it.size, it.brand, it.color,
+    (it.features||[]).join('・'), (it.design||[]).join('・'),
+    it.measurements ? it.measurements.shoulder : '', it.measurements ? it.measurements.chest : '',
+    it.measurements ? it.measurements.length : '', it.measurements ? it.measurements.sleeve : '',
+    it.rank, it.material, it.conditionDetail
+  ]);
+  let csv = '\ufeff' + headers.map(csvEscape).join(',') + '\r\n';
+  rows.forEach(row=>{ csv += row.map(csvEscape).join(',') + '\r\n'; });
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const now = new Date();
+  a.download = `商品一覧_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
 function downloadDraftCsv(){
   const headers=['商品番号','担当者','対象','種類','サイズ','ブランド','カラー','特徴','デザイン','肩幅cm','身幅cm','着丈cm','袖丈cm','状態ランク','素材','状態詳細'];
   const row=[draft.managementNo,draft.workerName,draft.gender,draft.category,draft.size,draft.brand,draft.color,(draft.features||[]).join('・'),(draft.design||[]).join('・'),draft.measurements.shoulder,draft.measurements.chest,draft.measurements.length,draft.measurements.sleeve,draft.rank,draft.material,draft.conditionDetail];
@@ -779,7 +813,7 @@ function bindStepEvents(){
     document.getElementById('download-data').addEventListener('click',async()=>{
       downloadDraftCsv();
       if(!itemsLoaded) await loadItems();
-      const no=items.length+1; const newItem={id:'item_'+Date.now(),no,displayNo:fmtNo(no),createdAt:new Date().toISOString(),status:'new',price:'',adminDescription:'',...JSON.parse(JSON.stringify(draft))};
+      const no=items.length+1; const newItem={id:'item_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),no,displayNo:fmtNo(no),createdAt:new Date().toISOString(),status:'new',price:'',adminDescription:'',...JSON.parse(JSON.stringify(draft))};
       items.push(newItem);
       await saveItem(newItem);
       document.getElementById('download-done').style.display='flex'; document.getElementById('next-item').style.display='block';
@@ -808,9 +842,10 @@ function showToast(msg){
 function renderRecent(){
   const block = document.getElementById('recent-block');
   const list = document.getElementById('recent-list');
-  if(!items.length){ block.style.display='none'; return; }
+  const visible = items.filter(it=>!it.deleted);
+  if(!visible.length){ block.style.display='none'; return; }
   block.style.display='block';
-  const recent = items.slice(-5).reverse();
+  const recent = visible.slice(-5).reverse();
   list.innerHTML = recent.map(it=>`
     <div class="recent-item">
       <span class="recent-tagno">${it.displayNo}</span>
@@ -848,15 +883,22 @@ document.getElementById('search-box').addEventListener('input', e=>{ adminSearch
 
 async function renderAdmin(){
   const loading = document.getElementById('admin-loading');
+  const retryBox = document.getElementById('admin-load-retry');
   const grid = document.getElementById('admin-grid');
   const empty = document.getElementById('admin-empty');
+  retryBox.style.display = 'none';
   if(!itemsLoaded){
     loading.style.display='flex'; grid.innerHTML=''; empty.style.display='none';
     await loadItems();
     loading.style.display='none';
+    if(!itemsLoaded){
+      // loadItems failed (network/timeout) — offer manual retry instead of hanging forever
+      retryBox.style.display = 'block';
+      return;
+    }
   }
   if(!templateLoaded) await loadTemplate();
-  let list = items.slice().reverse();
+  let list = items.slice().reverse().filter(it=>!it.deleted);
   if(adminFilter!=='all') list = list.filter(it=>it.status===adminFilter);
   if(adminSearch) list = list.filter(it=>
     (it.displayNo||'').toLowerCase().includes(adminSearch) ||
@@ -988,6 +1030,12 @@ function renderDetail(){
       </div>
 
       <button class="btn btn-primary btn-block" id="save-detail">保存する</button>
+
+      <div class="detail-section" style="margin-top:28px;border-top:1px solid var(--line);padding-top:18px;">
+        <div id="delete-zone">
+          <button class="btn btn-ghost btn-block" id="delete-step1" style="color:var(--red-deep);border-color:var(--red);">この商品を削除</button>
+        </div>
+      </div>
     </div>
   `;
   document.getElementById('detail-close').addEventListener('click', closeDetail);
@@ -1014,6 +1062,35 @@ function renderDetail(){
     btn.disabled = false; btn.textContent = ok ? '保存しました' : '保存に失敗しました';
     renderAdmin();
     setTimeout(()=>{ if(document.getElementById('save-detail')) document.getElementById('save-detail').textContent='保存する'; },1500);
+  });
+  bindDeleteZone(it);
+}
+
+function bindDeleteZone(it){
+  const zone = document.getElementById('delete-zone');
+  document.getElementById('delete-step1').addEventListener('click', ()=>{
+    zone.innerHTML = `
+      <p style="color:var(--red-deep);font-weight:700;font-size:14px;margin:0 0 12px;text-align:center;">本当にこの商品を削除しますか？<br>この操作は取り消せません。</p>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" id="delete-cancel" style="flex:1;">キャンセル</button>
+        <button class="btn btn-primary" id="delete-confirm" style="flex:1;background:var(--red-deep);">削除する</button>
+      </div>
+    `;
+    document.getElementById('delete-cancel').addEventListener('click', ()=>renderDetail());
+    document.getElementById('delete-confirm').addEventListener('click', async ()=>{
+      const btn = document.getElementById('delete-confirm');
+      btn.disabled = true; btn.textContent = '削除中…';
+      it.deleted = true;
+      it.deletedAt = new Date().toISOString();
+      const ok = await saveItem(it);
+      if(ok){
+        closeDetail();
+        renderAdmin();
+      } else {
+        btn.disabled = false; btn.textContent = '削除する';
+        zone.insertAdjacentHTML('afterbegin', '<div class="error-text" style="margin-bottom:10px;">削除に失敗しました。通信環境をご確認のうえ、もう一度お試しください。</div>');
+      }
+    });
   });
 }
 
