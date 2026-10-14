@@ -887,6 +887,7 @@ async function renderAdmin(){
   const grid = document.getElementById('admin-grid');
   const empty = document.getElementById('admin-empty');
   retryBox.style.display = 'none';
+  loading.style.display = 'none';
   if(!itemsLoaded){
     loading.style.display='flex'; grid.innerHTML=''; empty.style.display='none';
     await loadItems();
