@@ -976,7 +976,7 @@ function renderDetail(){
           <div class="kv"><div class="k">サイズ</div><div class="v">${escapeHtml(it.size)}</div></div>
           <div class="kv"><div class="k">ブランド</div><div class="v">${escapeHtml(it.brand)}</div></div>
           <div class="kv"><div class="k">カラー</div><div class="v">${escapeHtml(it.color)}</div></div>
-          <div class="kv"><div class="k">状態ランク</div><div class="v">${it.rank}</div></div>
+          <div class="kv"><div class="k">状態ランク</div><select id="in-rank" aria-label="状態ランク"><option value="">未設定</option>${RANKS.map(r=>`<option value="${r.k}" ${it.rank===r.k?'selected':''}>${r.k}：${r.d}</option>`).join('')}</select></div>
           <div class="kv"><div class="k">素材</div><div class="v">${escapeHtml(it.material)}</div></div>
         </div>
       </div>
@@ -1002,13 +1002,14 @@ function renderDetail(){
 
       <div class="detail-section">
         <h3>状態詳細</h3>
-        <div class="note-box">${escapeHtml(it.conditionDetail)}</div>
+        <textarea id="in-condition" aria-label="状態詳細" placeholder="汚れ、傷、使用感など">${escapeHtml(it.conditionDetail||'')}</textarea>
       </div>
 
       <div class="detail-section">
         <h3>写真(ステージング)</h3>
-        <a class="staging-link" href="${escapeAttr(it.stagingUrl)}" target="_blank" rel="noopener">
-          <i class="ti ti-external-link" aria-hidden="true"></i>${escapeHtml(it.stagingUrl)}
+        <input type="url" id="in-staging" aria-label="写真（ステージング）URL" value="${escapeAttr(it.stagingUrl||'')}" placeholder="写真の保存先URLを入力">
+        <a class="staging-link" id="staging-open" href="${escapeAttr(it.stagingUrl||'#')}" target="_blank" rel="noopener" style="${it.stagingUrl?'':'display:none;'}">
+          <i class="ti ti-external-link" aria-hidden="true"></i>写真リンクを開く
         </a>
         <p class="hint" style="margin-top:6px;">写真10枚以上アップロード確認:${it.photoConfirmed?'済':'未'}　配送サイズ:${escapeHtml(it.shippingSize||'-')}${escapeHtml(it.workerName? '　担当:'+it.workerName : '')}</p>
       </div>
@@ -1042,7 +1043,7 @@ function renderDetail(){
           <button data-p="yahoo" class="${activePlatform==='yahoo'?'active':''}">ヤフオク</button>
           <button data-p="rakuma" class="${activePlatform==='rakuma'?'active':''}">ラクマ</button>
         </div>
-        <textarea class="gen-text" id="gen-text" readonly></textarea>
+        <textarea class="gen-text" id="gen-text" aria-label="出品文（直接編集できます）"></textarea>
         <div class="copy-row"><button class="copy-btn" id="copy-btn"><i class="ti ti-copy" aria-hidden="true"></i>コピーする</button></div>
       </div>
 
@@ -1056,8 +1057,33 @@ function renderDetail(){
     </div>
   `;
   document.getElementById('detail-close').addEventListener('click', closeDetail);
-  document.querySelectorAll('.status-btn').forEach(b=>b.addEventListener('click', ()=>{ it.status=b.dataset.status; renderDetail(); }));
-  document.querySelectorAll('#platform-tabs button').forEach(b=>b.addEventListener('click', ()=>{ activePlatform=b.dataset.p; renderDetail(); }));
+  const syncAdminFields=()=>{
+    it.rank=document.getElementById('in-rank').value;
+    it.conditionDetail=document.getElementById('in-condition').value;
+    it.stagingUrl=document.getElementById('in-staging').value.trim();
+    it.price=document.getElementById('in-price').value;
+    it.adminDescription=document.getElementById('in-desc').value;
+  };
+  const refreshGeneratedText=()=>{ syncAdminFields(); updateGenText(it); };
+  ['in-rank','in-condition','in-price','in-desc'].forEach(id=>
+    document.getElementById(id).addEventListener('input',refreshGeneratedText));
+  document.getElementById('in-staging').addEventListener('input',()=>{
+    syncAdminFields();
+    const link=document.getElementById('staging-open');
+    link.href=it.stagingUrl||'#';
+    link.style.display=it.stagingUrl?'':'none';
+  });
+  document.querySelectorAll('.status-btn').forEach(b=>b.addEventListener('click', ()=>{
+    it.status=b.dataset.status;
+    document.querySelectorAll('.status-btn').forEach(el=>{
+      el.className='status-btn'+(el.dataset.status===it.status?' active-'+it.status:'');
+    });
+  }));
+  document.querySelectorAll('#platform-tabs button').forEach(b=>b.addEventListener('click', ()=>{
+    activePlatform=b.dataset.p;
+    document.querySelectorAll('#platform-tabs button').forEach(el=>el.classList.toggle('active',el===b));
+    refreshGeneratedText();
+  }));
   updateGenText(it);
   document.getElementById('copy-btn').addEventListener('click', ()=>{
     const ta = document.getElementById('gen-text');
@@ -1070,14 +1096,13 @@ function renderDetail(){
     }).catch(()=>{});
   });
   document.getElementById('save-detail').addEventListener('click', async ()=>{
-    it.price = document.getElementById('in-price').value;
-    it.adminDescription = document.getElementById('in-desc').value.trim();
+    syncAdminFields();
     if(it.price && (it.status==='new' || it.status==='checked')) it.status='priced';
     const btn = document.getElementById('save-detail');
     btn.disabled = true; btn.textContent='保存中…';
     const ok = await saveItem(it);
     btn.disabled = false; btn.textContent = ok ? '保存しました' : '保存に失敗しました';
-    renderAdmin();
+    if(ok) renderAdmin();
     setTimeout(()=>{ if(document.getElementById('save-detail')) document.getElementById('save-detail').textContent='保存する'; },1500);
   });
   bindDeleteZone(it);
