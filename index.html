@@ -504,7 +504,7 @@ function switchMode(mode){
   document.getElementById('btn-mode-admin').classList.toggle('active', mode==='admin');
   document.getElementById('view-worker').classList.toggle('active', mode==='worker');
   document.getElementById('view-admin').classList.toggle('active', mode==='admin');
-  if(mode==='admin') renderAdmin();
+  if(mode==='admin'){ itemsLoaded=false; renderAdmin(); }
   if(mode==='worker'){ if(!gateUnlocked) renderGate(); renderRecent(); }
 }
 
@@ -811,12 +811,28 @@ function bindStepEvents(){
   if(step===4){
     document.getElementById('back5').addEventListener('click',()=>{step=3;renderStep();});
     document.getElementById('download-data').addEventListener('click',async()=>{
-      downloadDraftCsv();
+      const btn=document.getElementById('download-data');
+      btn.disabled=true; btn.textContent='保存中…';
+      hideErr('err5');
       if(!itemsLoaded) await loadItems();
+      if(!itemsLoaded){
+        showErr('err5','商品一覧を取得できませんでした。通信状況を確認して、もう一度お試しください。');
+        btn.disabled=false; btn.textContent='データをダウンロード';
+        return;
+      }
       const no=items.length+1; const newItem={id:'item_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),no,displayNo:fmtNo(no),createdAt:new Date().toISOString(),status:'new',price:'',adminDescription:'',...JSON.parse(JSON.stringify(draft))};
+      const saved=await saveItem(newItem);
+      if(!saved){
+        showErr('err5','サーバーへの保存に失敗しました。通信状況を確認して、もう一度お試しください。');
+        btn.disabled=false; btn.textContent='データをダウンロード';
+        return;
+      }
       items.push(newItem);
-      await saveItem(newItem);
-      document.getElementById('download-done').style.display='flex'; document.getElementById('next-item').style.display='block';
+      downloadDraftCsv();
+      document.getElementById('download-done').textContent='✓ サーバーへの保存完了・CSVダウンロード開始';
+      document.getElementById('download-done').style.display='flex';
+      document.getElementById('next-item').style.display='block';
+      btn.textContent='保存済み';
     });
     document.getElementById('next-item').addEventListener('click',()=>{draft=blankDraft();gateUnlocked=false;step=0;renderGate();renderRecent();});
   }
