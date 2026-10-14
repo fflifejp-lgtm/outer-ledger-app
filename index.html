@@ -964,7 +964,7 @@ function renderDetail(){
   const sheet = document.getElementById('detail-sheet');
   sheet.innerHTML = `
     <div class="detail-head">
-      <div><div class="dno">${it.displayNo}</div><h2>${escapeHtml(title)}</h2></div>
+      <div><div class="dno">${it.displayNo}<span style="font-size:10px;color:#999;margin-left:8px;font-weight:400;">版 admin-fix-1</span></div><h2>${escapeHtml(title)}</h2></div>
       <button class="detail-close" id="detail-close" aria-label="閉じる"><i class="ti ti-x" aria-hidden="true"></i></button>
     </div>
     <div class="detail-body">
@@ -1066,13 +1066,13 @@ function renderDetail(){
   };
   const refreshGeneratedText=()=>{ syncAdminFields(); updateGenText(it); };
   ['in-rank','in-condition','in-price','in-desc'].forEach(id=>
-    document.getElementById(id).addEventListener('input',refreshGeneratedText));
-  document.getElementById('in-staging').addEventListener('input',()=>{
+    ['input','change','keyup'].forEach(ev=>document.getElementById(id).addEventListener(ev,refreshGeneratedText)));
+  ['input','change'].forEach(ev=>document.getElementById('in-staging').addEventListener(ev,()=>{
     syncAdminFields();
     const link=document.getElementById('staging-open');
     link.href=it.stagingUrl||'#';
     link.style.display=it.stagingUrl?'':'none';
-  });
+  }));
   document.querySelectorAll('.status-btn').forEach(b=>b.addEventListener('click', ()=>{
     it.status=b.dataset.status;
     document.querySelectorAll('.status-btn').forEach(el=>{
